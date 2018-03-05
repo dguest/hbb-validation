@@ -35,9 +35,12 @@ def draw_hist(hist, edges, out_dir, parts={}):
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
     centers = 1e-6 * (edges[1:] + edges[:-1]) / 2
+    gev_per_bin = (centers[1] - centers[0]) * 1e3
     with Canvas(f'{out_dir}/dijet.pdf') as can:
         can.ax.plot(centers, hist)
         can.ax.set_yscale('log')
+        can.ax.set_ylabel(f'jets * fb / {gev_per_bin:.0f} GeV')
+        can.ax.set_xlabel(r'Fat Jet $p_{\rm T}$ [GeV]')
         for dsid, part in parts.items():
             can.ax.plot(centers, part, label=str(dsid))
         can.ax.legend()
