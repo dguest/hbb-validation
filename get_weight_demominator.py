@@ -8,8 +8,9 @@ from argparse import ArgumentParser
 from h5py import File
 from glob import glob
 from collections import Counter
+from common import get_dsid
 
-import os, sys
+import sys
 import json
 
 def get_args():
@@ -17,21 +18,6 @@ def get_args():
     parser.add_argument('datasets', nargs='+')
     parser.add_argument('-o','--out-file')
     return parser.parse_args()
-
-def get_dsid(fpath):
-    return int(os.path.basename(fpath).split('.')[2])
-
-def is_dijet(dsid):
-    return 361020 <= dsid <= 361032
-
-def is_ditop(dsid):
-    return 301322 <= dsid <= 301335
-
-def is_dihiggs(dsid):
-    return 301488 <= dsid <= 301507
-
-def get_denom_dict(denom_file):
-    return {int(k): v for k, v in json.load(denom_file).items()}
 
 def get_counts(fpath, is_dijet):
     key = 'nEventsProcessed' if is_dijet else 'sumOfWeights'

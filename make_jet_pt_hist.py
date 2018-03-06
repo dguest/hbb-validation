@@ -10,8 +10,8 @@ from glob import glob
 import numpy as np
 import json, os
 
-from get_weight_demominator import get_denom_dict, get_dsid
-from get_weight_demominator import is_dijet, is_ditop, is_dihiggs
+from common import get_denom_dict, get_dsid
+from common import is_dijet, is_ditop, is_dihiggs
 from cross_section import CrossSections
 
 def get_args():
