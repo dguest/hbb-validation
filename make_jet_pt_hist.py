@@ -31,13 +31,13 @@ def get_hist(ds, edges):
             hist += np.histogram(pt, edges, weights=weight)[0]
     return hist
 
-def get_hist_reweighted(ds, edges, weights_hist):
+def get_hist_reweighted(ds, edges, ratio):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             indices = np.digitize(pt, edges) - 1
-            weight = weights_hist[indices]
+            weight = ratio[indices]
             hist += np.histogram(pt, edges, weights=weight)[0]
     return hist
 
@@ -89,7 +89,7 @@ def run_dijet(edges, args):
         dsid = get_dsid(ds)
         if not is_dijet(dsid):
             continue
-        if xsecs.datasets[dsid]['nevt'] == 0:
+        if xsecs.datasets[dsid]['denominator'] == 0:
             continue
         weight = xsecs.get_weight(dsid)
 

@@ -1,11 +1,11 @@
 class CrossSections:
-    def __init__(self, infile, nevt_dict, lumi_fb=1):
+    def __init__(self, infile, denom_dict, lumi_fb=1):
         self.datasets = {}
         self.lumi_fb = lumi_fb
         for rawline in infile:
-            self._add_line(rawline, nevt_dict)
+            self._add_line(rawline, denom_dict)
 
-    def _add_line(self, rawline, nevt_dict):
+    def _add_line(self, rawline, denom_dict):
         line = rawline.strip()
         if not line or line.startswith('#'):
             return
@@ -14,12 +14,12 @@ class CrossSections:
         self.datasets[dsid] = {
             'xsec_fb': float(xsec_nb_s) * 1e6,
             'filteff': float(filteff_s),
-            'nevt': nevt_dict.get(dsid, float('nan')),
+            'denominator': denom_dict.get(dsid, float('nan')),
             'shortname': shortname}
 
     def get_weight(self, dsid):
         rec = self.datasets[dsid]
-        return self.lumi_fb * rec['xsec_fb'] * rec['filteff'] / rec['nevt']
+        return self.lumi_fb * rec['xsec_fb'] * rec['filteff'] / rec['denominator']
 
     def is_signal(self, dsid):
         rec = self.datasets[dsid]

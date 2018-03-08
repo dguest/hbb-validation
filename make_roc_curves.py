@@ -131,7 +131,7 @@ def get_dijet(edges, args, discriminant=get_mv2):
         dsid = get_dsid(ds)
         if not is_dijet(dsid):
             continue
-        if xsecs.datasets[dsid]['nevt'] == 0:
+        if xsecs.datasets[dsid]['denominator'] == 0:
             continue
         weight = xsecs.get_weight(dsid)
         this_dsid = get_hist(ds, edges, discriminant) * weight
