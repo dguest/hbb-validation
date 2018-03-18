@@ -51,8 +51,8 @@ def draw_hist(hist, edges, out_dir, parts={}, file_name='dijet.pdf'):
     with Canvas(f'{out_dir}/{file_name}') as can:
         can.ax.plot(centers, hist)
         can.ax.set_yscale('log')
-        can.ax.set_ylabel(f'jets * fb / {gev_per_bin:.0f} GeV')
-        can.ax.set_xlabel(r'Fat Jet $p_{\rm T}$ [GeV]')
+        can.ax.set_ylabel(f'jets * fb / {gev_per_bin:.0f} TeV')
+        can.ax.set_xlabel(r'Fat Jet $p_{\rm T}$ [TeV]')
         maxval = can.ax.get_ylim()[1]
         can.ax.set_ylim(0.1, maxval)
         for dsid, part in parts.items():
