@@ -1,6 +1,7 @@
 import os, json
 
 def get_dsid(fpath):
+    assert os.path.isdir(fpath), f'{fpath} is not a directory'
     return int(os.path.basename(fpath).split('.')[2])
 
 def is_dijet(dsid):

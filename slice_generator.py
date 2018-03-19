@@ -37,7 +37,6 @@ def run():
 
 DEFAULT_DATASETS = ['fat_jet', 'subjet1', 'subjet2', 'subjet3']
 def sample_slice(file_dir, requested_entries, dataset_names=DEFAULT_DATASETS):
-    print()
     files = glob(f'{file_dir}/*.h5')
     datasets = defaultdict(list)
     total_entries = 0
@@ -54,7 +53,6 @@ def sample_slice(file_dir, requested_entries, dataset_names=DEFAULT_DATASETS):
                     datasets[ds_name].append(ds[0:needed])
             total_entries += ds.shape[0]
             total_added += min(ds.shape[0], needed)
-            print(f'requested: {requested_entries}, added {needed}, total added {total_added}, total {total_entries} ')
     out_datasets = {n: np.concatenate(lst) for n, lst in datasets.items()}
     return out_datasets, total_entries
 
@@ -80,7 +78,7 @@ def build_summary_dataset(datasets, args):
     for ds_name in datasets:
         dsid = get_dsid(ds_name)
         if is_dijet(dsid):
-            if xsecs.datasets[dsid]['denominator'] < 100:
+            if xsecs.datasets[dsid]['denominator'] == 0:
                 continue
             sample, total_entries = sample_slice(ds_name, args.sample_size)
             upweight = total_entries / sample['fat_jet'].shape[0]
@@ -99,8 +97,8 @@ def build_summary_dataset(datasets, args):
             for object_name, obj in sample.items():
                 samples['higgs'][object_name].append(obj)
         else:
+            print(f'skipping {dsid}!')
             continue
-        print(total_entries, upweight, dsid)
 
     # merge things
     merged_samples = defaultdict(dict)
@@ -109,15 +107,10 @@ def build_summary_dataset(datasets, args):
             merged = np.concatenate(samp_list, 0)
             merged_samples[phys_proc_name][obj_name] = merged
 
-    for phys_proc_name, obj_dict in merged_samples.items():
-        print(phys_proc_name, obj_dict['fat_jet']['mcEventWeight'].sum())
-        for obj_name, obj in obj_dict.items():
-            print(phys_proc_name, obj_name, obj.shape)
-
     if args.plots_dir:
         draw_hist(merged_samples, ['higgs', 'dijet'], args.plots_dir)
 
-def draw_hist(merged_samples, procs, out_dir):
+def draw_hist(merged_samples, procs, out_dir, batch_size=1000):
     from mpl import Canvas
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
@@ -129,7 +122,8 @@ def draw_hist(merged_samples, procs, out_dir):
         for proc in procs:
             var = merged_samples[proc][obj_name][var_name]
             weight = merged_samples[proc]['fat_jet']['mcEventWeight']
-            hist = np.histogram(var, edges, weights=weight)[0]
+            mega_weights = np.array(weight, dtype=np.float128)
+            hist = np.histogram(var, edges, weights=mega_weights)[0]
             can.ax.plot(centers, hist, label=proc)
         can.ax.set_yscale('log')
         can.ax.set_ylabel(f'jets * fb / {gev_per_bin:.0f} TeV')
