@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-o', '--out-dir', default='pt-hists')
+    parser.add_argument('-s', '--save-file')
     return parser.parse_args()
 
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
@@ -29,6 +30,9 @@ def get_mv2(h5file, discriminant='MV2c10_discriminant'):
     invalid = np.isnan(discrim_comb)
     discrim_comb[invalid] = -1.0
     return discrim_comb
+
+def get_dnn(h5file):
+    return np.asarray(h5file['fat_jet']['HbbTagger'])
 
 def get_dl1(h5file):
     sj1 = h5file['subjet1']
@@ -104,19 +108,44 @@ def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
     valid_eff = eff > min_eff
     canvas.ax.plot(eff[valid_eff], rej[valid_eff], label=label)
 
+DISCRIMINANT_GETTERS = {
+    'dl1': get_dl1,
+    'mv2': get_mv2,
+    'dnn': get_dnn,
+}
+DISCRIMINANT_EDGES = {
+    'dl1': np.linspace(-10, 10, 1e3),
+    'mv2': np.linspace(-1, 1, 1e3),
+    'dnn': np.linspace(0, 1, 1e3),
+}
+
 def run():
     args = get_args()
-    edges = np.linspace(-1, 1, 1e3)
-    edges_dl1 = np.linspace(-10, 10, 1e3)
 
-    bg = get_dijet(edges, args, get_mv2)
-    sig = get_higgs_reweighted(edges, args, get_mv2)
-    bg_dl1 = get_dijet(edges_dl1, args, get_dl1)
-    sig_dl1 = get_higgs_reweighted(edges_dl1, args, get_dl1)
+    discrims = {}
+    for discrim_name, getter in DISCRIMINANT_GETTERS.items():
+        edges = DISCRIMINANT_EDGES[discrim_name]
+        discrims[discrim_name] = {
+            'bg': get_dijet(edges, args, getter),
+            'sig': get_higgs_reweighted(edges, args, getter)
+        }
+
+    if args.save_file:
+        with File(args.save_file, 'w') as output_file:
+            for discrim in discrims:
+                grp = output_file.create_group(discrim)
+                grp.create_dataset('bg', data=discrims[discrim]['bg'])
+                grp.create_dataset('sig', data=discrims[discrim]['sig'])
+                grp.create_dataset('edges', data=DISCRIMINANT_EDGES[discrim])
+
+    draw_roc_curves(discrims, args.out_dir)
+
+def draw_roc_curves(discrims, out_dir):
     from mpl import Canvas
-    with Canvas(f'{args.out_dir}/roc.pdf') as can:
-        draw_roc(can, sig, bg, args.out_dir, label='mv2')
-        draw_roc(can, sig_dl1, bg_dl1, args.out_dir, label='dl1')
+    with Canvas(f'{out_dir}/roc.pdf') as can:
+        for dis_name, discrims in discrims.items():
+            sig, bg = discrims['sig'], discrims['bg']
+            draw_roc(can, sig, bg, out_dir, label=dis_name)
         can.ax.set_yscale('log')
         can.ax.legend()
 
