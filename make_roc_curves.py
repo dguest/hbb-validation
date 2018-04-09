@@ -12,6 +12,7 @@ import json, os
 
 from common import get_denom_dict, get_dsid
 from common import is_dijet, is_ditop, is_dihiggs
+from draw_roc_curves import draw_roc_curves
 from cross_section import CrossSections
 
 def get_args():
@@ -19,7 +20,7 @@ def get_args():
     parser.add_argument('datasets', nargs='+')
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
-    parser.add_argument('-o', '--out-dir', default='pt-hists')
+    parser.add_argument('-i', '--input-hist-dir', default='pt-hists')
     parser.add_argument('-s', '--save-file')
     parser.add_argument('-v', '--verbose', action='store_true')
     return parser.parse_args()
@@ -86,28 +87,6 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
             hist += np.histogram(disc[sel], edges, weights=weight[sel])[0]
     return hist
 
-def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
-    from mpl import Canvas
-    if not os.path.isdir(out_dir):
-        os.mkdir(out_dir)
-
-    eff = np.cumsum(sig[::-1])[::-1]
-    eff /= eff.max()
-    bg_eff = np.cumsum(bg[::-1])[::-1]
-    bg_eff /= bg_eff.max()
-    rej = np.zeros_like(bg_eff)
-    valid = bg_eff > 0.0
-    rej[valid] = 1/bg_eff[valid]
-
-    xbins = np.arange(sig.size)
-
-    with Canvas(f'{out_dir}/{label}.pdf') as can:
-        can.ax.step(xbins[1:], sig[1:], label='signal')
-        can.ax.step(xbins[1:], bg[1:], label='bg')
-        can.ax.legend()
-
-    valid_eff = eff > min_eff
-    canvas.ax.plot(eff[valid_eff], rej[valid_eff], label=label)
 
 DISCRIMINANT_GETTERS = {
     'dl1': get_dl1,
@@ -139,16 +118,7 @@ def run():
                 grp.create_dataset('sig', data=discrims[discrim]['sig'])
                 grp.create_dataset('edges', data=DISCRIMINANT_EDGES[discrim])
 
-    draw_roc_curves(discrims, args.out_dir)
-
-def draw_roc_curves(discrims, out_dir):
-    from mpl import Canvas
-    with Canvas(f'{out_dir}/roc.pdf') as can:
-        for dis_name, discrims in discrims.items():
-            sig, bg = discrims['sig'], discrims['bg']
-            draw_roc(can, sig, bg, out_dir, label=dis_name)
-        can.ax.set_yscale('log')
-        can.ax.legend()
+    draw_roc_curves(discrims, args.input_hist_dir)
 
 def get_dijet(edges, args, discriminant=get_mv2):
     with open(args.denominator, 'r') as denom_file:
@@ -172,7 +142,7 @@ def get_dijet(edges, args, discriminant=get_mv2):
     return hist
 
 def get_higgs_reweighted(edges, args, discriminant=get_mv2):
-    out_dir = args.out_dir
+    input_hists = args.input_hist_dir
 
     hist = 0
     for ds in args.datasets:
@@ -180,7 +150,7 @@ def get_higgs_reweighted(edges, args, discriminant=get_mv2):
         if not is_dihiggs(dsid):
             continue
 
-        this_dsid = get_hist_reweighted(ds, edges, f'{out_dir}/jetpt.h5',
+        this_dsid = get_hist_reweighted(ds, edges, f'{input_hists}/jetpt.h5',
                                         discriminant)
         hist += this_dsid
 
