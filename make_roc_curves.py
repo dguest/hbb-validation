@@ -21,6 +21,7 @@ def get_args():
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-o', '--out-dir', default='pt-hists')
     parser.add_argument('-s', '--save-file')
+    parser.add_argument('-v', '--verbose', action='store_true')
     return parser.parse_args()
 
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
@@ -32,7 +33,7 @@ def get_mv2(h5file, discriminant='MV2c10_discriminant'):
     return discrim_comb
 
 def get_dnn(h5file):
-    return np.asarray(h5file['fat_jet']['HbbTagger'])
+    return np.asarray(h5file['fat_jet']['HbbScore'])
 
 def get_dl1(h5file):
     sj1 = h5file['subjet1']
@@ -162,6 +163,8 @@ def get_dijet(edges, args, discriminant=get_mv2):
             continue
         if xsecs.datasets[dsid]['denominator'] == 0:
             continue
+        if args.verbose:
+            print(f'running on {ds}')
         weight = xsecs.get_weight(dsid)
         this_dsid = get_hist(ds, edges, discriminant) * weight
         hist += this_dsid
