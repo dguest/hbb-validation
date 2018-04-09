@@ -31,9 +31,11 @@ def draw_roc_curves(discrims, out_dir):
     with Canvas(f'{out_dir}/roc.pdf') as can:
         for dis_name, discrims in discrims.items():
             sig, bg = discrims['sig'], discrims['bg']
-            draw_roc(can, sig, bg, out_dir, label=dis_name)
+            draw_roc(can, sig, bg, out_dir, label=dis_name.upper())
         can.ax.set_yscale('log')
         can.ax.legend()
+        can.ax.set_ylabel('Multijet Rejection')
+        can.ax.set_xlabel('Higgs Efficiency')
 
 def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
     from mpl import Canvas
