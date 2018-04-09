@@ -9,6 +9,7 @@ from h5py import File
 from glob import glob
 import numpy as np
 import json, os
+from sys import stderr
 
 from common import get_denom_dict, get_dsid
 from common import is_dijet, is_ditop, is_dihiggs
@@ -28,7 +29,10 @@ def get_hist(ds, edges):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             weight = h5file['fat_jet']['mcEventWeight']
-            hist += np.histogram(pt, edges, weights=weight)[0]
+            mega_weights = np.array(weight, dtype=np.float128)
+            hist += np.histogram(pt, edges, weights=mega_weights)[0]
+            if np.any(np.isnan(hist)):
+                stderr.write(f'{fpath} has nans')
     return hist
 
 def get_hist_reweighted(ds, edges, ratio):
@@ -38,7 +42,8 @@ def get_hist_reweighted(ds, edges, ratio):
             pt = h5file['fat_jet']['pt']
             indices = np.digitize(pt, edges) - 1
             weight = ratio[indices]
-            hist += np.histogram(pt, edges, weights=weight)[0]
+            mega_weights = np.array(weight, dtype=np.float128)
+            hist += np.histogram(pt, edges, weights=mega_weights)[0]
     return hist
 
 
