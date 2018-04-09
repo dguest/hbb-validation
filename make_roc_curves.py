@@ -99,6 +99,14 @@ DISCRIMINANT_EDGES = {
     'dnn': np.linspace(0, 1, 1e3),
 }
 
+def write_discriminants(discrims, output_file):
+    args = dict(dtype=float)
+    for discrim in discrims:
+        grp = output_file.create_group(discrim)
+        grp.create_dataset('bg', data=discrims[discrim]['bg'], **args)
+        grp.create_dataset('sig', data=discrims[discrim]['sig'], **args)
+        grp.create_dataset('edges', data=DISCRIMINANT_EDGES[discrim], **args)
+
 def run():
     args = get_args()
 
@@ -112,11 +120,7 @@ def run():
 
     if args.save_file:
         with File(args.save_file, 'w') as output_file:
-            for discrim in discrims:
-                grp = output_file.create_group(discrim)
-                grp.create_dataset('bg', data=discrims[discrim]['bg'])
-                grp.create_dataset('sig', data=discrims[discrim]['sig'])
-                grp.create_dataset('edges', data=DISCRIMINANT_EDGES[discrim])
+            write_discriminants(discrims, output_file)
 
     draw_roc_curves(discrims, args.input_hist_dir)
 
