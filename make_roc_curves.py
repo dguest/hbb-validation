@@ -25,6 +25,10 @@ def get_args():
     parser.add_argument('-v', '--verbose', action='store_true')
     return parser.parse_args()
 
+####################
+# variable getters #
+####################
+
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
     disc1 = h5file['subjet1'][discriminant]
     disc2 = h5file['subjet2'][discriminant]
@@ -37,15 +41,20 @@ def get_dnn(h5file):
     return np.asarray(h5file['fat_jet']['HbbScore'])
 
 def get_dl1(h5file):
-    sj1 = h5file['subjet1']
-    disc1 = sj1['DL1_pb'] / sj1['DL1_pu']
-    sj2 = h5file['subjet1']
-    disc2 = sj2['DL1_pb'] / sj2['DL1_pu']
+    def dl1_sj(subjet, f=0.08):
+        sj = h5file[subjet]
+        return sj['DL1_pb'] / ( (1-f) * sj['DL1_pu'] + f * sj['DL1_pc'])
+
+    disc1 = dl1_sj('subjet1')
+    disc2 = dl1_sj('subjet2')
     discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
     invalid = np.isnan(discrim_comb) | np.isinf(discrim_comb)
     discrim_comb[invalid] = 1e-15
     return np.log(np.clip(discrim_comb, 1e-30, 1e30))
 
+#############
+# selectors #
+#############
 def mass_window(ds):
     fat_mass = ds['fat_jet']['mass']
     return (fat_mass > 76e3) & (fat_mass < 146e3)
@@ -55,6 +64,25 @@ def mass_window_truth_match(ds):
     truth_match &= mass_window(ds)
     return truth_match
 
+def window_pt_range(pt_range):
+    def selector(ds):
+        window = mass_window(ds)
+        fat_pt = ds['fat_jet']['pt']
+        pt_window = (fat_pt > pt_range[0]) & (fat_pt < pt_range[1])
+        return window & pt_window
+    return selector
+
+def window_pt_range_truth_match(pt_range):
+    def selector(ds):
+        window = mass_window_truth_match(ds)
+        fat_pt = ds['fat_jet']['pt']
+        pt_window = (fat_pt > pt_range[0]) & (fat_pt < pt_range[1])
+        return window & pt_window
+    return selector
+
+#################################
+# functions that do real things #
+#################################
 def get_hist(ds, edges, discriminant, selection=mass_window):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
@@ -111,11 +139,13 @@ def run():
     args = get_args()
 
     discrims = {}
+    dijet_selector = window_pt_range((0, np.inf))
+    higgs_selector = window_pt_range_truth_match((0, np.inf))
     for discrim_name, getter in DISCRIMINANT_GETTERS.items():
         edges = DISCRIMINANT_EDGES[discrim_name]
         discrims[discrim_name] = {
-            'bg': get_dijet(edges, args, getter),
-            'sig': get_higgs_reweighted(edges, args, getter)
+            'bg': get_dijet(edges, args, getter, dijet_selector),
+            'sig': get_higgs_reweighted(edges, args, getter, higgs_selector)
         }
 
     if args.save_file:
@@ -124,7 +154,8 @@ def run():
 
     draw_roc_curves(discrims, args.input_hist_dir)
 
-def get_dijet(edges, args, discriminant=get_mv2):
+def get_dijet(edges, args, discriminant=get_mv2,
+              selection=mass_window):
     with open(args.denominator, 'r') as denom_file:
         denom = get_denom_dict(denom_file)
     with open(args.cross_sections, 'r') as xsec_file:
@@ -140,12 +171,14 @@ def get_dijet(edges, args, discriminant=get_mv2):
         if args.verbose:
             print(f'running on {ds}')
         weight = xsecs.get_weight(dsid)
-        this_dsid = get_hist(ds, edges, discriminant) * weight
+        this_dsid = get_hist(
+            ds, edges, discriminant, selection) * weight
         hist += this_dsid
 
     return hist
 
-def get_higgs_reweighted(edges, args, discriminant=get_mv2):
+def get_higgs_reweighted(edges, args, discriminant=get_mv2,
+                         selection=mass_window_truth_match):
     input_hists = args.input_hist_dir
 
     hist = 0
@@ -154,8 +187,9 @@ def get_higgs_reweighted(edges, args, discriminant=get_mv2):
         if not is_dihiggs(dsid):
             continue
 
-        this_dsid = get_hist_reweighted(ds, edges, f'{input_hists}/jetpt.h5',
-                                        discriminant)
+        this_dsid = get_hist_reweighted(
+            ds, edges, f'{input_hists}/jetpt.h5',
+            discriminant, selection)
         hist += this_dsid
 
     return hist
