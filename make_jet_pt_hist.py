@@ -21,21 +21,24 @@ def get_args():
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-o', '--out-dir', default='pt-hists')
+    parser.add_argument('-c', '--discrim-cut', type=float)
     return parser.parse_args()
 
-def get_hist(ds, edges):
+def get_hist(ds, edges, selection):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             weight = h5file['fat_jet']['mcEventWeight']
             mega_weights = np.array(weight, dtype=np.float128)
-            hist += np.histogram(pt, edges, weights=mega_weights)[0]
+            sel_index = selection(h5file)
+            hist += np.histogram(
+                pt[sel_index], edges, weights=mega_weights[sel_index])[0]
             if np.any(np.isnan(hist)):
                 stderr.write(f'{fpath} has nans')
     return hist
 
-def get_hist_reweighted(ds, edges, ratio):
+def get_hist_reweighted(ds, edges, ratio, selection):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
@@ -43,7 +46,9 @@ def get_hist_reweighted(ds, edges, ratio):
             indices = np.digitize(pt, edges) - 1
             weight = ratio[indices]
             mega_weights = np.array(weight, dtype=np.float128)
-            hist += np.histogram(pt, edges, weights=mega_weights)[0]
+            sel_index = selection(h5file)
+            hist += np.histogram(pt[sel_index], edges,
+                                 weights=mega_weights[sel_index])[0]
     return hist
 
 
@@ -82,6 +87,16 @@ def run():
     run_higgs(edges, args)
     run_higgs_reweighted(edges, args)
 
+
+def get_selector(args):
+    if args.discrim_cut:
+        def selector(hfile):
+            return hfile['fat_jet']['HbbScore'] > args.discrim_cut
+    else:
+        def selector(hfile):
+            return np.ones(hfile['fat_jet'].shape, dtype=bool)
+    return selector
+
 def run_dijet(edges, args):
     with open(args.denominator, 'r') as denom_file:
         denom = get_denom_dict(denom_file)
@@ -98,7 +113,7 @@ def run_dijet(edges, args):
             continue
         weight = xsecs.get_weight(dsid)
 
-        this_dsid = get_hist(ds, edges) * weight
+        this_dsid = get_hist(ds, edges, get_selector(args)) * weight
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
@@ -113,7 +128,7 @@ def run_higgs(edges, args):
         if not is_dihiggs(dsid):
             continue
 
-        this_dsid = get_hist(ds, edges)
+        this_dsid = get_hist(ds, edges, get_selector(args))
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
@@ -135,7 +150,7 @@ def run_higgs_reweighted(edges, args):
         if not is_dihiggs(dsid):
             continue
 
-        this_dsid = get_hist_reweighted(ds, edges, ratio)
+        this_dsid = get_hist_reweighted(ds, edges, ratio, get_selector(args))
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
