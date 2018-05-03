@@ -10,6 +10,7 @@ from glob import glob
 import numpy as np
 import json, os
 from sys import stderr
+from numpy.lib.recfunctions import append_fields
 
 from common import get_denom_dict, get_dsid
 from common import is_dijet, is_ditop, is_dihiggs
@@ -17,14 +18,19 @@ from cross_section import CrossSections
 
 def get_args():
     parser = ArgumentParser(description=__doc__)
+    d = 'default: %(default)s'
     parser.add_argument('datasets', nargs='+')
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-o', '--out-dir', default='pt-hists')
     parser.add_argument('-c', '--discrim-cut', type=float)
+    parser.add_argument('-f', '--output-fields', nargs='+',
+                        default=['pt', 'mass', 'HbbScore'], help=d)
+    out_format = parser.add_mutually_exclusive_group()
+    out_format.add_argument('-m', '--kinematic-ntuple')
     return parser.parse_args()
 
-def get_hist(ds, edges, selection):
+def get_hist(ds, edges, selection, output_dataset=None):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
@@ -34,11 +40,13 @@ def get_hist(ds, edges, selection):
             sel_index = selection(h5file)
             hist += np.histogram(
                 pt[sel_index], edges, weights=mega_weights[sel_index])[0]
+            if output_dataset:
+                output_dataset.add(h5file, mega_weights)
             if np.any(np.isnan(hist)):
                 stderr.write(f'{fpath} has nans')
     return hist
 
-def get_hist_reweighted(ds, edges, ratio, selection):
+def get_hist_reweighted(ds, edges, ratio, selection, output_dataset=None):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
@@ -49,8 +57,25 @@ def get_hist_reweighted(ds, edges, ratio, selection):
             sel_index = selection(h5file)
             hist += np.histogram(pt[sel_index], edges,
                                  weights=mega_weights[sel_index])[0]
+            if output_dataset:
+                output_dataset.add(h5file, mega_weights)
     return hist
 
+class OutputDataset:
+    def __init__(self, h5file, old_file, ds_name, variables):
+        self.variables = tuple(variables)
+        types = [(x, old_file['fat_jet'].dtype[x]) for x in variables]
+        types.append( ('weights', float) )
+        self.dataset = h5file.create_dataset(
+            ds_name, (0,), maxshape=(None,), dtype=types, chunks=(1000,),
+            compression='gzip', compression_opts=7)
+    def add(self, h5file, weights):
+        fat = h5file['fat_jet']
+        oldmark = self.dataset.shape[0]
+        self.dataset.resize(oldmark + fat.shape[0], axis=0)
+        slim_fat = fat[self.variables]
+        self.dataset[oldmark:] = append_fields(
+            slim_fat, 'weights', data=weights)
 
 def draw_hist(hist, edges, out_dir, parts={}, file_name='dijet.pdf'):
     from mpl import Canvas
@@ -83,10 +108,16 @@ def run():
     out_hists = os.path.join(args.out_dir, 'jetpt.h5')
     if os.path.isfile(out_hists):
         os.remove(out_hists)
-    run_dijet(edges, args)
+    if args.kinematic_ntuple:
+        out_file = File(args.kinematic_ntuple, 'w')
+    else:
+        out_file = None
+    run_dijet(edges, args, out_file)
     run_higgs(edges, args)
-    run_higgs_reweighted(edges, args)
+    run_higgs_reweighted(edges, args, out_file)
 
+    if out_file:
+        out_file.close()
 
 def get_selector(args):
     if args.discrim_cut:
@@ -97,11 +128,18 @@ def get_selector(args):
             return np.ones(hfile['fat_jet'].shape, dtype=bool)
     return selector
 
-def run_dijet(edges, args):
+def run_dijet(edges, args, output_file):
     with open(args.denominator, 'r') as denom_file:
         denom = get_denom_dict(denom_file)
     with open(args.cross_sections, 'r') as xsec_file:
         xsecs = CrossSections(xsec_file, denom)
+
+    if output_file:
+        with File(glob(args.datasets[0] + '/*.h5')[0], 'r') as old_file:
+            out_ds = OutputDataset(
+                output_file, old_file, 'dijet', args.output_fields)
+    else:
+        out_ds = None
 
     parts = {}
     hist = 0
@@ -113,7 +151,7 @@ def run_dijet(edges, args):
             continue
         weight = xsecs.get_weight(dsid)
 
-        this_dsid = get_hist(ds, edges, get_selector(args)) * weight
+        this_dsid = get_hist(ds, edges, get_selector(args), out_ds) * weight
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
@@ -135,7 +173,7 @@ def run_higgs(edges, args):
     draw_hist(hist, edges, args.out_dir, parts, file_name='higgs.pdf')
     save_hist(hist, edges, args.out_dir, 'jetpt.h5', 'higgs')
 
-def run_higgs_reweighted(edges, args):
+def run_higgs_reweighted(edges, args, output_file):
     hist = 0
     parts = {}
     out_dir = args.out_dir
@@ -145,12 +183,21 @@ def run_higgs_reweighted(edges, args):
         ratio = np.zeros_like(num)
         valid = np.asarray(denom) > 0.0
         ratio[valid] = num[valid] / denom[valid]
+
+    if output_file:
+        with File(glob(args.datasets[0] + '/*.h5')[0], 'r') as old_file:
+            out_ds = OutputDataset(
+                output_file, old_file, 'higgs', args.output_fields)
+    else:
+        out_ds = None
+
     for ds in args.datasets:
         dsid = get_dsid(ds)
         if not is_dihiggs(dsid):
             continue
 
-        this_dsid = get_hist_reweighted(ds, edges, ratio, get_selector(args))
+        this_dsid = get_hist_reweighted(ds, edges, ratio,
+                                        get_selector(args), out_ds)
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
