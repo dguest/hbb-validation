@@ -15,18 +15,17 @@ def get_args():
 
 def run():
     args = get_args()
-    taggers = {}
+    samples = {}
     with File(args.distributinos, 'r') as dists:
-        for tagger_name, tagger_dists in dists.items():
-            taggers[tagger_name] = get_cut_values(tagger_dists)
-    print(taggers)
+        for sample, discrim_hist in dists.items():
+            samples[sample] = get_cut_values(discrim_hist)
+    print(samples)
 
-def get_cut_values(tagger_dists, bg_effs=[0.5, 0.1, 0.01]):
-    bg = np.asarray(tagger_dists['bg'])
-    cuts = np.asarray(tagger_dists['edges'])[-2::-1]
-    bg_integral = bg[::-1].cumsum() / bg.sum()
-    print(bg_integral.shape, cuts.shape)
-    interp_cuts = np.interp(bg_effs, bg_integral, cuts)
+def get_cut_values(tagger_dists, effs=[0.5, 0.1, 0.01]):
+    hist = np.asarray(tagger_dists['hist'])[:1:-1]
+    cuts = np.asarray(tagger_dists['edges'])[-2:1:-1]
+    integral = hist.cumsum() / hist.sum()
+    interp_cuts = np.interp(effs, integral, cuts)
     return interp_cuts
 
 if __name__ == '__main__':

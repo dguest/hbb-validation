@@ -19,23 +19,24 @@ def get_args():
 
 def run():
     args = get_args()
+    ds_opt = dict(compression='gzip')
     with File(args.kinematics_file, 'r') as in_file:
         with File(args.out_file,'w') as out_file:
             for procname, ds in in_file.items():
                 hist, edges = get_score_hist(ds)
                 out_grp = out_file.create_group(procname)
-                out_grp.create_dataset('hist', data=hist)
-                out_grp.create_dataset('edges', data=edges)
+                out_grp.create_dataset('hist', data=hist, **ds_opt)
+                out_grp.create_dataset('edges', data=edges, **ds_opt)
 
 def get_score_hist(ds):
-    edges = np.concatenate([[-np.inf], np.linspace(0, 0, 1e3), [np.inf]])
+    edges = np.concatenate([[-np.inf], np.linspace(0, 1, 1e3), [np.inf]])
     score = ds['HbbScore']
     # we need to up the weight precision because some of them are
     # really small. This isn't normally a problem, but when they are
     # combined in a numpy histogram the lower weights get lost.
     weights = np.array(ds['weights'], dtype=np.float128)
     hist, edges = np.histogram(score, edges, weights=weights)
-    return hist, edges
+    return np.array(hist, dtype=float), edges
 
 def draw_hist(hist, edges, out_dir, parts={}, file_name='dijet.pdf'):
     if not os.path.isdir(out_dir):
