@@ -12,9 +12,9 @@ import json, os
 from sys import stderr
 from numpy.lib.recfunctions import append_fields
 
-from common import get_denom_dict, get_dsid
-from common import is_dijet, is_ditop, is_dihiggs
-from cross_section import CrossSections
+from xbb.common import get_denom_dict, get_dsid
+from xbb.common import is_dijet, is_ditop, is_dihiggs
+from xbb.cross_section import CrossSections
 
 def get_args():
     parser = ArgumentParser(description=__doc__)
@@ -78,7 +78,7 @@ class OutputDataset:
             slim_fat, 'weights', data=weights)
 
 def draw_hist(hist, edges, out_dir, parts={}, file_name='dijet.pdf'):
-    from mpl import Canvas
+    from xbb.mpl import Canvas
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
     centers = 1e-6 * (edges[1:] + edges[:-1]) / 2
