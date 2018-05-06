@@ -30,13 +30,13 @@ def get_args():
     out_format.add_argument('-m', '--kinematic-ntuple')
     return parser.parse_args()
 
-def get_hist(ds, edges, selection, output_dataset=None):
+def get_hist(ds, edges, selection, output_dataset=None, ds_wt=1.0):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             weight = h5file['fat_jet']['mcEventWeight']
-            mega_weights = np.array(weight, dtype=np.float128)
+            mega_weights = np.array(weight, dtype=np.float128) * ds_wt
             sel_index = selection(h5file)
             hist += np.histogram(
                 pt[sel_index], edges, weights=mega_weights[sel_index])[0]
@@ -151,7 +151,7 @@ def run_dijet(edges, args, output_file):
             continue
         weight = xsecs.get_weight(dsid)
 
-        this_dsid = get_hist(ds, edges, get_selector(args), out_ds) * weight
+        this_dsid = get_hist(ds, edges, get_selector(args), out_ds, weight)
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
