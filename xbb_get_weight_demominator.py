@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from h5py import File
 from glob import glob
 from collections import Counter
-from common import get_dsid, is_dijet
+from xbb.common import get_dsid, is_dijet
 
 import sys
 import json
