@@ -20,6 +20,7 @@ def get_args():
     parser = ArgumentParser(description=__doc__)
     d = 'default: %(default)s'
     parser.add_argument('datasets', nargs='+')
+    parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-o', '--out-dir', default='pt-hists')
@@ -147,6 +148,8 @@ def run_dijet(edges, args, output_file):
         dsid = get_dsid(ds)
         if not is_dijet(dsid):
             continue
+        if args.verbose:
+            print(f'processing {ds} as dijet')
         if xsecs.datasets[dsid]['denominator'] == 0:
             continue
         weight = xsecs.get_weight(dsid)
@@ -165,6 +168,8 @@ def run_higgs(edges, args):
         dsid = get_dsid(ds)
         if not is_dihiggs(dsid):
             continue
+        if args.verbose:
+            print(f'processing {ds} as higgs')
 
         this_dsid = get_hist(ds, edges, get_selector(args))
         parts[dsid] = np.array(this_dsid)
@@ -195,6 +200,8 @@ def run_higgs_reweighted(edges, args, output_file):
         dsid = get_dsid(ds)
         if not is_dihiggs(dsid):
             continue
+        if args.verbose:
+            print(f'processing {ds} as higgs')
 
         this_dsid = get_hist_reweighted(ds, edges, ratio,
                                         get_selector(args), out_ds)
