@@ -15,12 +15,18 @@ from xbb.common import is_dijet, is_ditop, is_dihiggs
 from xbb_draw_roc_curves import draw_roc_curves
 from xbb.cross_section import CrossSections
 
+# default settings
+PT_RANGE = (250e3, np.inf)
+
 def get_args():
     parser = ArgumentParser(description=__doc__)
+    d = 'default: %(default)s'
     parser.add_argument('datasets', nargs='+')
     parser.add_argument('-d', '--denominator', required=True)
     parser.add_argument('-x', '--cross-sections', required=True)
     parser.add_argument('-i', '--input-hist-dir', default='pt-hists')
+    parser.add_argument('-p', '--pt-range',
+                        nargs=2, type=float, default=PT_RANGE, help=d)
     parser.add_argument('-s', '--save-file')
     parser.add_argument('-v', '--verbose', action='store_true')
     return parser.parse_args()
@@ -29,9 +35,13 @@ def get_args():
 # variable getters #
 ####################
 
+# various constants
+SJ1 = 'subjet_VR_1'
+SJ2 = 'subjet_VR_2'
+
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
-    disc1 = h5file['subjet1'][discriminant]
-    disc2 = h5file['subjet2'][discriminant]
+    disc1 = h5file[SJ1][discriminant]
+    disc2 = h5file[SJ2][discriminant]
     discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
     invalid = np.isnan(discrim_comb)
     discrim_comb[invalid] = -1.0
@@ -40,13 +50,23 @@ def get_mv2(h5file, discriminant='MV2c10_discriminant'):
 def get_dnn(h5file):
     return np.asarray(h5file['fat_jet']['HbbScore'])
 
+def get_xbb_antilight(h5file):
+    num = np.asarray(h5file['fat_jet']['XbbScoreHiggs'])
+    denom = np.asarray(h5file['fat_jet']['XbbScoreQCD'])
+    valid = (denom != 0.0) & (num != 0.0) & (np.isfinite(num))
+    ret_vals = np.empty_like(num)
+    ret_vals[valid] = np.log(num[valid] / denom[valid])
+    ret_vals[~valid] = -10.0
+    return ret_vals
+
+
 def get_dl1(h5file):
     def dl1_sj(subjet, f=0.08):
         sj = h5file[subjet]
         return sj['DL1_pb'] / ( (1-f) * sj['DL1_pu'] + f * sj['DL1_pc'])
 
-    disc1 = dl1_sj('subjet1')
-    disc2 = dl1_sj('subjet2')
+    disc1 = dl1_sj(SJ1)
+    disc2 = dl1_sj(SJ2)
     discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
     invalid = np.isnan(discrim_comb) | np.isinf(discrim_comb)
     discrim_comb[invalid] = 1e-15
@@ -117,14 +137,16 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
 
 
 DISCRIMINANT_GETTERS = {
+    'xbb': get_xbb_antilight,
     'dl1': get_dl1,
-    'mv2': get_mv2,
+    # 'mv2': get_mv2,
     'dnn': get_dnn,
 }
 DISCRIMINANT_EDGES = {
     'dl1': np.linspace(-10, 10, 1e3),
     'mv2': np.linspace(-1, 1, 1e3),
     'dnn': np.linspace(0, 1, 1e3),
+    'xbb': np.linspace(-10, 10, 1e3),
 }
 
 def write_discriminants(discrims, output_file):
@@ -139,9 +161,11 @@ def run():
     args = get_args()
 
     discrims = {}
-    dijet_selector = window_pt_range((0, np.inf))
-    higgs_selector = window_pt_range_truth_match((0, np.inf))
+    dijet_selector = window_pt_range(args.pt_range)
+    higgs_selector = window_pt_range_truth_match(args.pt_range)
     for discrim_name, getter in DISCRIMINANT_GETTERS.items():
+        if args.verbose:
+            print(f'running {discrim_name}')
         edges = DISCRIMINANT_EDGES[discrim_name]
         discrims[discrim_name] = {
             'bg': get_dijet(edges, args, getter, dijet_selector),
@@ -164,7 +188,7 @@ def get_dijet(edges, args, discriminant=get_mv2,
     hist = 0
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dijet(dsid):
+        if not is_dijet(dsid, restricted=True):
             continue
         if xsecs.datasets[dsid]['denominator'] == 0:
             continue
@@ -186,6 +210,8 @@ def get_higgs_reweighted(edges, args, discriminant=get_mv2,
         dsid = get_dsid(ds)
         if not is_dihiggs(dsid):
             continue
+        if args.verbose:
+            print(f'running on {ds}')
 
         this_dsid = get_hist_reweighted(
             ds, edges, f'{input_hists}/jetpt.h5',

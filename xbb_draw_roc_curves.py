@@ -27,7 +27,7 @@ def run():
     draw_roc_curves(discrims, args.out_dir)
 
 def draw_roc_curves(discrims, out_dir):
-    from mpl import Canvas
+    from xbb.mpl import Canvas
     with Canvas(f'{out_dir}/roc.pdf') as can:
         for dis_name, discrims in discrims.items():
             sig, bg = discrims['sig'], discrims['bg']
@@ -38,7 +38,7 @@ def draw_roc_curves(discrims, out_dir):
         can.ax.set_xlabel('Higgs Efficiency')
 
 def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
-    from mpl import Canvas
+    from xbb.mpl import Canvas
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
@@ -53,8 +53,8 @@ def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
     xbins = np.arange(sig.size)
 
     with Canvas(f'{out_dir}/{label}.pdf') as can:
-        can.ax.step(xbins[1:], sig[1:], label='signal')
-        can.ax.step(xbins[1:], bg[1:], label='bg')
+        can.ax.step(xbins, eff, label='signal')
+        can.ax.step(xbins, bg_eff, label='bg')
         can.ax.legend()
 
     valid_eff = eff > min_eff
