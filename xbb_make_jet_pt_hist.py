@@ -146,7 +146,7 @@ def run_dijet(edges, args, output_file):
     hist = 0
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dijet(dsid):
+        if not is_dijet(dsid, restricted=True):
             continue
         if args.verbose:
             print(f'processing {ds} as dijet')
