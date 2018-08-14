@@ -37,7 +37,7 @@ def get_hist(ds, edges, selection, output_dataset=None, ds_wt=1.0):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             weight = h5file['fat_jet']['mcEventWeight']
-            mega_weights = np.array(weight, dtype=np.float128) * ds_wt
+            mega_weights = np.array(weight, dtype=np.longdouble) * ds_wt
             sel_index = selection(h5file)
             hist += np.histogram(
                 pt[sel_index], edges, weights=mega_weights[sel_index])[0]
@@ -54,7 +54,7 @@ def get_hist_reweighted(ds, edges, ratio, selection, output_dataset=None):
             pt = h5file['fat_jet']['pt']
             indices = np.digitize(pt, edges) - 1
             weight = ratio[indices]
-            mega_weights = np.array(weight, dtype=np.float128)
+            mega_weights = np.array(weight, dtype=np.longdouble)
             sel_index = selection(h5file)
             hist += np.histogram(pt[sel_index], edges,
                                  weights=mega_weights[sel_index])[0]
@@ -100,7 +100,9 @@ def save_hist(hist, edges, out_dir, file_name, group_name):
         os.mkdir(out_dir)
     with File(f'{out_dir}/{file_name}','a') as h5file:
         hist_group = h5file.create_group(group_name)
-        hist_group.create_dataset('hist', data=hist)
+        # we need a bit of a hack here: float128 (longdouble) doesn't
+        # get stored properly by h5py as of version 2.8
+        hist_group.create_dataset('hist', data=hist, dtype=float)
         hist_group.create_dataset('edges', data=edges)
 
 def run():
