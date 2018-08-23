@@ -168,7 +168,7 @@ def run_higgs(edges, args):
     parts = {}
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dihiggs(dsid):
+        if not is_dihiggs(dsid, restricted=True):
             continue
         if args.verbose:
             print(f'processing {ds} as higgs')
@@ -200,7 +200,7 @@ def run_higgs_reweighted(edges, args, output_file):
 
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dihiggs(dsid):
+        if not is_dihiggs(dsid, restricted=True):
             continue
         if args.verbose:
             print(f'processing {ds} as higgs')

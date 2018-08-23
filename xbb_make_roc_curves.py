@@ -139,11 +139,11 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
 
 
 DISCRIMINANT_GETTERS = {
-    'xbb': get_xbb_antilight,
+    # 'xbb': get_xbb_antilight,
     'dl1': make_dl1_getter(SJ),
     'dl1ghost': make_dl1_getter(SJ_GHOST),
     # 'mv2': get_mv2,
-    'dnn': get_dnn,
+    # 'dnn': get_dnn,
 }
 DISCRIMINANT_EDGES = {
     'dl1': np.linspace(-10, 10, 1e3),
@@ -188,6 +188,7 @@ def get_dijet(edges, args, discriminant=get_mv2,
         denom = get_denom_dict(denom_file)
     with open(args.cross_sections, 'r') as xsec_file:
         xsecs = CrossSections(xsec_file, denom)
+    input_hists = args.input_hist_dir
 
     hist = 0
     for ds in args.datasets:
@@ -199,8 +200,9 @@ def get_dijet(edges, args, discriminant=get_mv2,
         if args.verbose:
             print(f'running on {ds}')
         weight = xsecs.get_weight(dsid)
-        this_dsid = get_hist(
-            ds, edges, discriminant, selection) * weight
+        this_dsid = get_hist_reweighted(
+            ds, edges, f'{input_hists}/jetpt.h5',
+            discriminant, selection) * weight
         hist += this_dsid
 
     return hist
