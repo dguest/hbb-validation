@@ -36,8 +36,8 @@ def get_args():
 ####################
 
 # various constants
-SJ1 = 'subjet_VR_1'
-SJ2 = 'subjet_VR_2'
+SJ = 'subjet_VR_{}'
+SJ_GHOST = 'subjet_VRGhostTag_{}'
 
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
     disc1 = h5file[SJ1][discriminant]
@@ -60,17 +60,19 @@ def get_xbb_antilight(h5file):
     return ret_vals
 
 
-def get_dl1(h5file):
-    def dl1_sj(subjet, f=0.08):
-        sj = h5file[subjet]
-        return sj['DL1_pb'] / ( (1-f) * sj['DL1_pu'] + f * sj['DL1_pc'])
+def make_dl1_getter(subjet=SJ):
+    def get_dl1(h5file, subjet=subjet):
+        def dl1_sj(subjet, f=0.08):
+            sj = h5file[subjet]
+            return sj['DL1_pb'] / ( (1-f) * sj['DL1_pu'] + f * sj['DL1_pc'])
 
-    disc1 = dl1_sj(SJ1)
-    disc2 = dl1_sj(SJ2)
-    discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
-    invalid = np.isnan(discrim_comb) | np.isinf(discrim_comb)
-    discrim_comb[invalid] = 1e-15
-    return np.log(np.clip(discrim_comb, 1e-30, 1e30))
+        disc1 = dl1_sj(subjet.format(1))
+        disc2 = dl1_sj(subjet.format(2))
+        discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
+        invalid = np.isnan(discrim_comb) | np.isinf(discrim_comb)
+        discrim_comb[invalid] = 1e-15
+        return np.log(np.clip(discrim_comb, 1e-30, 1e30))
+    return get_dl1
 
 #############
 # selectors #
@@ -138,12 +140,14 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
 
 DISCRIMINANT_GETTERS = {
     'xbb': get_xbb_antilight,
-    'dl1': get_dl1,
+    'dl1': make_dl1_getter(SJ),
+    'dl1ghost': make_dl1_getter(SJ_GHOST),
     # 'mv2': get_mv2,
     'dnn': get_dnn,
 }
 DISCRIMINANT_EDGES = {
     'dl1': np.linspace(-10, 10, 1e3),
+    'dl1ghost': np.linspace(-10, 10, 1e3),
     'mv2': np.linspace(-1, 1, 1e3),
     'dnn': np.linspace(0, 1, 1e3),
     'xbb': np.linspace(-10, 10, 1e3),
