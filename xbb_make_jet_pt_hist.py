@@ -13,7 +13,8 @@ from sys import stderr
 from numpy.lib.recfunctions import append_fields
 
 from xbb.common import get_denom_dict, get_dsid
-from xbb.common import is_dijet, is_ditop, is_dihiggs
+from xbb.common import SELECTORS
+from xbb.common import is_dijet, is_dihiggs
 from xbb.cross_section import CrossSections
 
 def get_args():
@@ -116,7 +117,8 @@ def run():
     else:
         out_file = None
     run_dijet(edges, args, out_file)
-    run_higgs(edges, args)
+    run_sample(edges, 'higgs', args)
+    run_sample(edges, 'top', args)
     run_higgs_reweighted(edges, args, out_file)
 
     if out_file:
@@ -163,22 +165,23 @@ def run_dijet(edges, args, output_file):
     draw_hist(hist, edges, args.out_dir, parts, file_name='dijet.pdf')
     save_hist(hist, edges, args.out_dir, 'jetpt.h5', 'dijet')
 
-def run_higgs(edges, args):
+def run_sample(edges, process, args):
     hist = 0
     parts = {}
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dihiggs(dsid, restricted=True):
+        if not SELECTORS[process](dsid, restricted=True):
             continue
         if args.verbose:
-            print(f'processing {ds} as higgs')
+            print(f'processing {ds} as {process}')
 
         this_dsid = get_hist(ds, edges, get_selector(args))
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
-    draw_hist(hist, edges, args.out_dir, parts, file_name='higgs.pdf')
-    save_hist(hist, edges, args.out_dir, 'jetpt.h5', 'higgs')
+    draw_hist(hist, edges, args.out_dir, parts,
+              file_name=f'{process}.pdf')
+    save_hist(hist, edges, args.out_dir, 'jetpt.h5', process)
 
 def run_higgs_reweighted(edges, args, output_file):
     hist = 0

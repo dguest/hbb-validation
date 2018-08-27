@@ -12,6 +12,7 @@ import json, os
 def get_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('h5_roc_curves')
+    parser.add_argument('-d', '--discriminant-list', nargs='*')
     parser.add_argument('-o', '--out-dir', default='plots')
     return parser.parse_args()
 
@@ -20,22 +21,41 @@ def run():
     discrims = {}
     with File(args.h5_roc_curves,'r') as h5file:
         for discrim_name, group in h5file.items():
-            ds_names = ['sig', 'bg', 'edges']
+            if args.discriminant_list:
+                if discrim_name not in args.discriminant_list:
+                    continue
+            ds_names = ['higgs', 'dijet', 'top', 'edges']
             discrims[discrim_name] = {
                 x: np.asarray(group[x]) for x in ds_names
             }
     draw_roc_curves(discrims, args.out_dir)
 
 def draw_roc_curves(discrims, out_dir):
+    draw_roc_curves_multijet(discrims, out_dir)
+    draw_roc_curves_top(discrims, out_dir)
+
+def draw_roc_curves_multijet(discrims, out_dir):
     from xbb.mpl import Canvas
-    with Canvas(f'{out_dir}/roc.pdf') as can:
+    with Canvas(f'{out_dir}/roc_multijet.pdf') as can:
         for dis_name, discrims in discrims.items():
-            sig, bg = discrims['sig'], discrims['bg']
+            sig, bg = discrims['higgs'], discrims['dijet']
             draw_roc(can, sig, bg, out_dir, label=dis_name.upper())
         can.ax.set_yscale('log')
         can.ax.legend()
         can.ax.set_ylabel('Multijet Rejection')
         can.ax.set_xlabel('Higgs Efficiency')
+
+def draw_roc_curves_top(discrims, out_dir):
+    from xbb.mpl import Canvas
+    with Canvas(f'{out_dir}/roc_top.pdf') as can:
+        for dis_name, discrims in discrims.items():
+            sig, bg = discrims['higgs'], discrims['top']
+            draw_roc(can, sig, bg, out_dir, label=dis_name.upper())
+        can.ax.set_yscale('log')
+        can.ax.legend()
+        can.ax.set_ylabel('Top Rejection')
+        can.ax.set_xlabel('Higgs Efficiency')
+
 
 def draw_roc(canvas, sig, bg, out_dir, label, min_eff=0.4):
     from xbb.mpl import Canvas

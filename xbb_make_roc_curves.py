@@ -12,6 +12,7 @@ import json, os
 
 from xbb.common import get_denom_dict, get_dsid
 from xbb.common import is_dijet, is_ditop, is_dihiggs
+from xbb.common import SELECTORS
 from xbb_draw_roc_curves import draw_roc_curves
 from xbb.cross_section import CrossSections
 
@@ -40,8 +41,8 @@ SJ = 'subjet_VR_{}'
 SJ_GHOST = 'subjet_VRGhostTag_{}'
 
 def get_mv2(h5file, discriminant='MV2c10_discriminant'):
-    disc1 = h5file[SJ1][discriminant]
-    disc2 = h5file[SJ2][discriminant]
+    disc1 = h5file[SJ.format(1)][discriminant]
+    disc2 = h5file[SJ.format(2)][discriminant]
     discrim_comb = np.stack([disc1, disc2], axis=1).min(axis=1)
     invalid = np.isnan(discrim_comb)
     discrim_comb[invalid] = -1.0
@@ -50,20 +51,25 @@ def get_mv2(h5file, discriminant='MV2c10_discriminant'):
 def get_dnn(h5file):
     return np.asarray(h5file['fat_jet']['HbbScore'])
 
-def get_xbb_antilight(h5file):
-    num = np.asarray(h5file['fat_jet']['XbbScoreHiggs'])
-    denom = np.asarray(h5file['fat_jet']['XbbScoreQCD'])
-    valid = (denom != 0.0) & (num != 0.0) & (np.isfinite(num))
-    ret_vals = np.empty_like(num)
-    ret_vals[valid] = np.log(num[valid] / denom[valid])
-    ret_vals[~valid] = -10.0
-    return ret_vals
+def make_xbb_getter(ftop=0.5):
+    def get_xbb(h5file,ftop=ftop):
+        fj = h5file['fat_jet']['XbbScoreHiggs', 'XbbScoreQCD', 'XbbScoreTop']
+        num = fj['XbbScoreHiggs']
+        denom_qcd = fj['XbbScoreQCD'] * (1 - ftop)
+        denom_top = fj['XbbScoreTop'] * ftop
+        denom = denom_qcd + denom_top
+        valid = (denom != 0.0) & (num != 0.0) & (np.isfinite(num))
+        ret_vals = np.empty_like(num)
+        ret_vals[valid] = np.log(num[valid] / denom[valid])
+        ret_vals[~valid] = -10.0
+        return ret_vals
+    return get_xbb
 
 
 def make_dl1_getter(subjet=SJ):
     def get_dl1(h5file, subjet=subjet):
         def dl1_sj(subjet, f=0.08):
-            sj = h5file[subjet]
+            sj = h5file[subjet]['DL1_pb','DL1_pu','DL1_pc']
             return sj['DL1_pb'] / ( (1-f) * sj['DL1_pu'] + f * sj['DL1_pc'])
 
         disc1 = dl1_sj(subjet.format(1))
@@ -119,8 +125,8 @@ def get_hist(ds, edges, discriminant, selection=mass_window):
 def get_hist_reweighted(ds, edges, weights_hist, discriminant,
                         selection=mass_window_truth_match):
     with File(weights_hist, 'r') as h5file:
-        num = h5file['dijet']['hist']
-        denom = h5file['higgs']['hist']
+        num = h5file['higgs']['hist']
+        denom = h5file['dijet']['hist']
         ratio_edges = np.asarray(h5file['higgs']['edges'])
         ratio = np.zeros_like(num)
         valid = np.asarray(denom) > 0.0
@@ -139,9 +145,11 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
 
 
 DISCRIMINANT_GETTERS = {
-    # 'xbb': get_xbb_antilight,
+    'xbb_anti_qcd': make_xbb_getter(ftop=0),
+    'xbb_mixed': make_xbb_getter(ftop=0.5),
+    'xbb_anti_top': make_xbb_getter(ftop=1.0),
     'dl1': make_dl1_getter(SJ),
-    'dl1ghost': make_dl1_getter(SJ_GHOST),
+    # 'dl1ghost': make_dl1_getter(SJ_GHOST),
     # 'mv2': get_mv2,
     # 'dnn': get_dnn,
 }
@@ -150,15 +158,17 @@ DISCRIMINANT_EDGES = {
     'dl1ghost': np.linspace(-10, 10, 1e3),
     'mv2': np.linspace(-1, 1, 1e3),
     'dnn': np.linspace(0, 1, 1e3),
-    'xbb': np.linspace(-10, 10, 1e3),
+    'xbb_anti_qcd': np.linspace(-10, 10, 1e3),
+    'xbb_anti_top': np.linspace(-10, 10, 1e3),
+    'xbb_mixed': np.linspace(-10, 10, 1e3),
 }
 
 def write_discriminants(discrims, output_file):
     args = dict(dtype=float)
     for discrim in discrims:
         grp = output_file.create_group(discrim)
-        grp.create_dataset('bg', data=discrims[discrim]['bg'], **args)
-        grp.create_dataset('sig', data=discrims[discrim]['sig'], **args)
+        for proc in ['higgs', 'dijet', 'top']:
+            grp.create_dataset(proc, data=discrims[discrim][proc], **args)
         grp.create_dataset('edges', data=DISCRIMINANT_EDGES[discrim], **args)
 
 def run():
@@ -166,14 +176,16 @@ def run():
 
     discrims = {}
     dijet_selector = window_pt_range(args.pt_range)
+    top_selector = window_pt_range(args.pt_range)
     higgs_selector = window_pt_range_truth_match(args.pt_range)
     for discrim_name, getter in DISCRIMINANT_GETTERS.items():
         if args.verbose:
             print(f'running {discrim_name}')
         edges = DISCRIMINANT_EDGES[discrim_name]
         discrims[discrim_name] = {
-            'bg': get_dijet(edges, args, getter, dijet_selector),
-            'sig': get_higgs_reweighted(edges, args, getter, higgs_selector)
+            'dijet': get_dijet(edges, args, getter, dijet_selector),
+            'higgs': get_process(edges, 'higgs', args, getter, higgs_selector),
+            'top': get_process(edges, 'top', args, getter, top_selector)
         }
 
     if args.save_file:
@@ -207,17 +219,16 @@ def get_dijet(edges, args, discriminant=get_mv2,
 
     return hist
 
-def get_higgs_reweighted(edges, args, discriminant=get_mv2,
-                         selection=mass_window_truth_match):
+def get_process(edges, process, args, discriminant, selection):
     input_hists = args.input_hist_dir
 
     hist = 0
     for ds in args.datasets:
         dsid = get_dsid(ds)
-        if not is_dihiggs(dsid):
+        if not SELECTORS[process](dsid):
             continue
         if args.verbose:
-            print(f'running on {ds}')
+            print(f'running on {ds} as {process}')
 
         this_dsid = get_hist_reweighted(
             ds, edges, f'{input_hists}/jetpt.h5',
