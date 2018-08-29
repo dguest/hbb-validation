@@ -66,6 +66,21 @@ def make_xbb_getter(ftop=0.5):
     return get_xbb
 
 
+def get_top_vs_qcd(h5file):
+    fj = h5file['fat_jet']['XbbScoreQCD', 'XbbScoreTop']
+    num = fj['XbbScoreTop']
+    denom = fj['XbbScoreQCD']
+    valid = (denom != 0.0) & (num != 0.0) & (np.isfinite(num))
+    ret_vals = np.empty_like(num)
+    ret_vals[valid] = np.log(num[valid] / denom[valid])
+    ret_vals[~valid] = -10.0
+    return ret_vals
+
+def get_tau32(h5file):
+    vals = 1.0 - h5file['fat_jet']['Tau32_wta']
+    vals[~np.isfinite(vals)] = 0.0
+    return vals
+
 def make_dl1_getter(subjet=SJ):
     def get_dl1(h5file, subjet=subjet):
         def dl1_sj(subjet, f=0.08):
@@ -83,27 +98,30 @@ def make_dl1_getter(subjet=SJ):
 #############
 # selectors #
 #############
-def mass_window(ds):
-    fat_mass = ds['fat_jet']['mass']
+def mass_window_higgs(ds):
+    fat_mass = ds['mass']
     return (fat_mass > 76e3) & (fat_mass < 146e3)
 
-def mass_window_truth_match(ds):
-    truth_match = ds['fat_jet']['GhostHBosonsCount'] == 1
+def mass_window_top(ds):
+    return ds['mass'] > 60e3
+
+def mass_window_truth_match(ds, mass_window=mass_window_higgs):
+    truth_match = ds['GhostHBosonsCount'] == 1
     truth_match &= mass_window(ds)
     return truth_match
 
-def window_pt_range(pt_range):
+def window_pt_range(pt_range, mass_window=mass_window_higgs):
     def selector(ds):
         window = mass_window(ds)
-        fat_pt = ds['fat_jet']['pt']
+        fat_pt = ds['pt']
         pt_window = (fat_pt > pt_range[0]) & (fat_pt < pt_range[1])
         return window & pt_window
     return selector
 
-def window_pt_range_truth_match(pt_range):
+def window_pt_range_truth_match(pt_range, mass_window=mass_window_higgs):
     def selector(ds):
-        window = mass_window_truth_match(ds)
-        fat_pt = ds['fat_jet']['pt']
+        window = mass_window_truth_match(ds, mass_window)
+        fat_pt = ds['pt']
         pt_window = (fat_pt > pt_range[0]) & (fat_pt < pt_range[1])
         return window & pt_window
     return selector
@@ -111,13 +129,13 @@ def window_pt_range_truth_match(pt_range):
 #################################
 # functions that do real things #
 #################################
-def get_hist(ds, edges, discriminant, selection=mass_window):
+def get_hist(ds, edges, discriminant, selection=mass_window_higgs):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
             discrim = discriminant(h5file)
             weight = h5file['fat_jet']['mcEventWeight']
-            sel = selection(h5file)
+            sel = selection(h5file['fat_jet'])
             hist += np.histogram(
                 discrim[sel], edges, weights=weight[sel])[0]
     return hist
@@ -139,16 +157,18 @@ def get_hist_reweighted(ds, edges, weights_hist, discriminant,
             indices = np.digitize(pt, ratio_edges) - 1
             weight = ratio[indices]
             disc = discriminant(h5file)
-            sel = selection(h5file)
+            sel = selection(h5file['fat_jet'])
             hist += np.histogram(disc[sel], edges, weights=weight[sel])[0]
     return hist
 
 
 DISCRIMINANT_GETTERS = {
+    'tau32_top_vs_qcd': get_tau32,
     'xbb_anti_qcd': make_xbb_getter(ftop=0),
     'xbb_mixed': make_xbb_getter(ftop=0.5),
     'xbb_anti_top': make_xbb_getter(ftop=1.0),
     'dl1': make_dl1_getter(SJ),
+    'xbb_top_vs_qcd': get_top_vs_qcd,
     # 'dl1ghost': make_dl1_getter(SJ_GHOST),
     # 'mv2': get_mv2,
     # 'dnn': get_dnn,
@@ -161,6 +181,8 @@ DISCRIMINANT_EDGES = {
     'xbb_anti_qcd': np.linspace(-10, 10, 1e3),
     'xbb_anti_top': np.linspace(-10, 10, 1e3),
     'xbb_mixed': np.linspace(-10, 10, 1e3),
+    'xbb_top_vs_qcd': np.linspace(-10, 10, 1e3),
+    'tau32_top_vs_qcd': np.linspace(0, 1, 1e3),
 }
 
 def write_discriminants(discrims, output_file):
@@ -175,12 +197,17 @@ def run():
     args = get_args()
 
     discrims = {}
-    dijet_selector = window_pt_range(args.pt_range)
-    top_selector = window_pt_range(args.pt_range)
-    higgs_selector = window_pt_range_truth_match(args.pt_range)
     for discrim_name, getter in DISCRIMINANT_GETTERS.items():
         if args.verbose:
             print(f'running {discrim_name}')
+        if 'top_vs_qcd' in discrim_name:
+            window = mass_window_top
+        else:
+            window = mass_window_higgs
+        dijet_selector = window_pt_range(args.pt_range, window)
+        top_selector = window_pt_range(args.pt_range, window)
+        higgs_selector = window_pt_range_truth_match(args.pt_range, window)
+
         edges = DISCRIMINANT_EDGES[discrim_name]
         discrims[discrim_name] = {
             'dijet': get_dijet(edges, args, getter, dijet_selector),
@@ -195,7 +222,7 @@ def run():
     draw_roc_curves(discrims, args.input_hist_dir)
 
 def get_dijet(edges, args, discriminant=get_mv2,
-              selection=mass_window):
+              selection=mass_window_higgs):
     with open(args.denominator, 'r') as denom_file:
         denom = get_denom_dict(denom_file)
     with open(args.cross_sections, 'r') as xsec_file:
