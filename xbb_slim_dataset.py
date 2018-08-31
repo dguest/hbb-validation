@@ -37,10 +37,15 @@ def build_slimmed_file_for(ds, out_ds):
     with File(paths[0], 'r') as base:
         for name, dsv in DATASETS_N_VARS.items():
             out_datasets[name] = OutputDataset(base[name], out_ds, name, dsv)
+        metadata = np.asarray(base['metadata'])
     for fpath in paths:
         with File(fpath,'r') as infile:
             for ds_name, ods in out_datasets.items():
                 ods.add(infile[ds_name])
+            md = infile['metadata']
+            for key in metadata.dtype.names:
+                metadata[key] += md[key]
+    out_ds.create_dataset('metadata', data=metadata)
 
 class OutputDataset:
     def __init__(self, base_ds, out_group, output_name, variables):
