@@ -9,7 +9,7 @@ echo "submit from $SLURM_SUBMIT_DIR"
 cd $SLURM_SUBMIT_DIR
 echo "Running on $1, building in $2"
 
-xbb_slim_dataset.py $1 -o $2
+xbb_slim_dataset.py --force $1 -o $2
 
 echo "done"
 
