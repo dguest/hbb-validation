@@ -30,7 +30,7 @@ FORCE=''
 
 get_options() {
     local opt
-    while getopts ":hfi:o:" opt $@; do
+    while getopts ":hfi:o:l:" opt $@; do
 	      case $opt in
 	          h) _help; return 1;;
             f) FORCE=TRUE ;;
@@ -92,5 +92,7 @@ do
         echo "skipping $DS, it is not a directory!" >&2
         continue
     fi
-    sbatch ${BOPTS} xbb-slurm-run-slimming.sh $DS $OUTPUTS
+    echo -n "Submitting $DS "
+    sbatch ${BOPTS} xbb-slurm-run-slimming.sh $DS $OUTPUTS > /dev/null
+    echo "done"
 done
