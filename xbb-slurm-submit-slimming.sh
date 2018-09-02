@@ -16,7 +16,7 @@ mkdir -p logs
 # The '-o' and '-e' are to specify where the outputs go. Note that the
 # time limit, '-t' is in minutes.
 #
-BOPTS="-t 60 -p atlas_all -c 2 -o logs/out-%j.txt -e logs/error-%j.txt"
+BOPTS="-t 60 -p atlas_all -o logs/out-%j.txt -e logs/error-%j.txt"
 
 # Actually submit the job
 #
