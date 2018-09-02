@@ -22,9 +22,10 @@ SUBJET_VARS = [*[f'DL1_p{x}' for x in 'cub'], 'MV2c10_discriminant']
 
 DATASETS_N_VARS = {
     'fat_jet': [
-        'pt', 'eta', 'mass', 'mcEventWeight',
+        'pt', 'eta', 'mass', 'mcEventWeight', 'eventNumber',
         *[f'XbbScore{x}' for x in ['Top', 'QCD', 'Higgs']],
         'Tau32_wta', 'JSSTopScore',
+        *[f'Ghost{p}BosonsCount' for p in 'HWZ'], 'GhostTQuarksFinalCount',
     ],
     'subjet_VR_1': SUBJET_VARS,
     'subjet_VR_2': SUBJET_VARS,
