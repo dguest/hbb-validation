@@ -16,6 +16,7 @@ from xbb.common import get_denom_dict, get_dsid
 from xbb.common import SELECTORS
 from xbb.common import is_dijet, is_dihiggs
 from xbb.cross_section import CrossSections
+from xbb.selectors import truth_match, EVENT_LABELS, all_events
 
 def get_args():
     parser = ArgumentParser(description=__doc__)
@@ -32,20 +33,20 @@ def get_args():
     out_format.add_argument('-m', '--kinematic-ntuple')
     return parser.parse_args()
 
-def get_hist(ds, edges, selection, output_dataset=None, ds_wt=1.0):
+def get_hist(ds, edges, selection=all_events, output_dataset=None, ds_wt=1.0):
     hist = 0
     for fpath in glob(f'{ds}/*.h5'):
         with File(fpath,'r') as h5file:
             pt = h5file['fat_jet']['pt']
             weight = h5file['fat_jet']['mcEventWeight']
             mega_weights = np.array(weight, dtype=np.longdouble) * ds_wt
-            sel_index = selection(h5file)
+            sel_index = selection(h5file['fat_jet'])
             hist += np.histogram(
                 pt[sel_index], edges, weights=mega_weights[sel_index])[0]
             if output_dataset:
                 output_dataset.add(h5file, mega_weights)
             if np.any(np.isnan(hist)):
-                stderr.write(f'{fpath} has nans')
+                stderr.write(f'{fpath} has nans\n')
     return hist
 
 def get_hist_reweighted(ds, edges, ratio, selection, output_dataset=None):
@@ -56,7 +57,7 @@ def get_hist_reweighted(ds, edges, ratio, selection, output_dataset=None):
             indices = np.digitize(pt, edges) - 1
             weight = ratio[indices]
             mega_weights = np.array(weight, dtype=np.longdouble)
-            sel_index = selection(h5file)
+            sel_index = selection(h5file['fat_jet'])
             hist += np.histogram(pt[sel_index], edges,
                                  weights=mega_weights[sel_index])[0]
             if output_dataset:
@@ -124,15 +125,6 @@ def run():
     if out_file:
         out_file.close()
 
-def get_selector(args):
-    if args.discrim_cut:
-        def selector(hfile):
-            return hfile['fat_jet']['HbbScore'] > args.discrim_cut
-    else:
-        def selector(hfile):
-            return np.ones(hfile['fat_jet'].shape, dtype=bool)
-    return selector
-
 def run_dijet(edges, args, output_file):
     with open(args.denominator, 'r') as denom_file:
         denom = get_denom_dict(denom_file)
@@ -158,7 +150,7 @@ def run_dijet(edges, args, output_file):
             continue
         weight = xsecs.get_weight(dsid)
 
-        this_dsid = get_hist(ds, edges, get_selector(args), out_ds, weight)
+        this_dsid = get_hist(ds, edges, all_events, out_ds, weight)
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
@@ -168,6 +160,7 @@ def run_dijet(edges, args, output_file):
 def run_sample(edges, process, args):
     hist = 0
     parts = {}
+    selector = truth_match(EVENT_LABELS[process])
     for ds in args.datasets:
         dsid = get_dsid(ds)
         if not SELECTORS[process](dsid, restricted=True):
@@ -175,7 +168,7 @@ def run_sample(edges, process, args):
         if args.verbose:
             print(f'processing {ds} as {process}')
 
-        this_dsid = get_hist(ds, edges, get_selector(args))
+        this_dsid = get_hist(ds, edges, selector)
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
@@ -208,8 +201,7 @@ def run_higgs_reweighted(edges, args, output_file):
         if args.verbose:
             print(f'processing {ds} as higgs')
 
-        this_dsid = get_hist_reweighted(ds, edges, ratio,
-                                        get_selector(args), out_ds)
+        this_dsid = get_hist_reweighted(ds, edges, ratio,all_events, out_ds)
         parts[dsid] = np.array(this_dsid)
         hist += this_dsid
 
