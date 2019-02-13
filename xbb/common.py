@@ -13,6 +13,9 @@ def is_ditop(dsid, restricted=False):
     return 301322 <= dsid <= 301335
 
 def is_dihiggs(dsid, restricted=False):
+    # extended high mass samples
+    if 305776 <= dsid <= 305780:
+        return True
     if restricted:
         return 301500 <= dsid <= 301507
     return 301488 <= dsid <= 301507
